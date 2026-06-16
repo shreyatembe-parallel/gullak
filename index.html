@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>Gullak · Golden Thank You Week</title>
+<style>
+  /* ============================================================= *
+   *  GULLAK — GRATITUDE CHAIN
+   *  Single-file interactive infinite canvas.
+   * ============================================================= */
+  :root{
+    --wine-core:#5a1430;
+    --wine-mid:#3d0d20;
+    --wine-edge:#240813;
+    --pill:#46101f;
+    --pill-2:#5c1a32;
+    --cream:#fcf9f7;
+    --gold:#ffd36b;
+    --gold-2:#ffb05a;
+    --gold-deep:#e0a93c;
+    --thread:#e9b24a;
+    --thread-lite:#ffe9a8;
+    --green:#5fd17c;
+    --red:#d44d4d;
+    --ink:#231f20;
+    --ui-font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0c0307;font-family:var(--ui-font);}
+  body{
+    color:var(--cream);
+    user-select:none;-webkit-user-select:none;
+    display:flex;justify-content:center;
+  }
+  img{display:block;-webkit-user-drag:none;user-drag:none;}
+
+  /* portrait phone frame — full-screen on a real phone, centred column on desktop */
+  #app{
+    position:relative;
+    width:min(100vw,440px);
+    height:100vh;height:100dvh;
+    overflow:hidden;
+    background:#1a0610;
+    box-shadow:0 0 60px rgba(0,0,0,.6);
+  }
+
+  /* ---------- viewport & world ---------- */
+  #viewport{
+    position:absolute;inset:0;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% 38%, var(--wine-core) 0%, var(--wine-mid) 42%, var(--wine-edge) 100%);
+    touch-action:none;cursor:grab;
+  }
+  #viewport.grabbing{cursor:grabbing;}
+  #world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;}
+
+  /* single globe-grid backdrop (Grid.svg), sized to cover the chain */
+  .grid-globe{
+    position:absolute;pointer-events:none;opacity:.95;
+    filter:saturate(1.05);
+    mix-blend-mode:screen;
+  }
+
+  /* ---------- threads svg ---------- */
+  #threads{position:absolute;pointer-events:none;overflow:visible;}
+  /* thin, crisp golden threads — non-scaling so they stay <0.8px at any zoom */
+  .thread{fill:none;stroke:url(#goldGrad);stroke-width:0.7;vector-effect:non-scaling-stroke;
+    stroke-linecap:round;opacity:.92;}
+  .glow{fill:none;stroke:var(--thread);stroke-width:2.4;vector-effect:non-scaling-stroke;
+    opacity:.13;filter:url(#soft);stroke-linecap:round;}
+  .shimmer{
+    fill:none;stroke:var(--thread-lite);stroke-width:0.9;vector-effect:non-scaling-stroke;
+    stroke-linecap:round;
+    stroke-dasharray:9 100;stroke-dashoffset:109;opacity:0;
+    animation:glint 5.5s linear infinite;
+  }
+  @keyframes glint{
+    0%{stroke-dashoffset:109;opacity:0;}
+    6%{opacity:.95;}
+    42%{stroke-dashoffset:9;opacity:.95;}
+    52%{stroke-dashoffset:9;opacity:0;}
+    100%{stroke-dashoffset:9;opacity:0;}
+  }
+
+  /* ---------- nodes ---------- */
+  .node{
+    position:absolute;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    transition:opacity .45s ease, filter .45s ease;
+    cursor:pointer;
+  }
+  .node.hidden{opacity:0;pointer-events:none;filter:blur(2px);}
+  .node .stamp{
+    position:relative;width:58px;height:58px;border-radius:50%;
+    display:grid;place-items:center;
+  }
+  .node .stamp img{width:100%;height:100%;object-fit:contain;
+    filter:drop-shadow(0 6px 12px rgba(0,0,0,.45));}
+  .node.seed .stamp{width:62px;height:62px;
+    box-shadow:0 0 26px 4px rgba(255,180,80,.45);border-radius:50%;}
+  .node.you .stamp{width:64px;height:64px;}
+  .node.cluster .stamp{width:66px;height:66px;}
+
+  .pill{
+    background:var(--pill);color:var(--cream);
+    font-size:12px;font-weight:600;line-height:1;letter-spacing:.1px;
+    padding:7px 11px;border-radius:9px;white-space:nowrap;
+    box-shadow:0 3px 9px rgba(0,0,0,.35);
+    border:1px solid rgba(255,255,255,.06);
+  }
+  .pill.you{
+    background:linear-gradient(135deg,var(--gold) 0%,var(--gold-2) 100%);
+    color:var(--ink);font-weight:800;padding:7px 18px;
+    box-shadow:0 4px 14px rgba(255,160,60,.5);
+  }
+  .pill.seed{font-weight:700;}
+  .pill.cluster{background:var(--pill-2);}
+
+  /* live "Just now" tag under a node */
+  .live-tag{
+    display:none;align-items:center;gap:5px;
+    background:var(--pill);color:var(--green);
+    font-size:11px;font-weight:700;padding:5px 9px;border-radius:8px;
+    box-shadow:0 3px 9px rgba(0,0,0,.35);
+  }
+  .live-tag .dot{width:6px;height:6px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 0 0 rgba(95,209,124,.7);animation:dotpulse 1.4s infinite;}
+  .node.live .live-tag{display:flex;animation:tagrise .4s ease;}
+  @keyframes tagrise{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+  @keyframes dotpulse{
+    0%{box-shadow:0 0 0 0 rgba(95,209,124,.55);}
+    70%{box-shadow:0 0 0 7px rgba(95,209,124,0);}
+    100%{box-shadow:0 0 0 0 rgba(95,209,124,0);}
+  }
+
+  /* ping ring on the stamp when a node goes live */
+  .node .ping{
+    position:absolute;inset:0;border-radius:50%;border:2px solid var(--gold);
+    opacity:0;pointer-events:none;
+  }
+  .node.live .ping{animation:ping 1.6s ease-out 2;}
+  @keyframes ping{
+    0%{opacity:.85;transform:scale(.6);}
+    100%{opacity:0;transform:scale(2.4);}
+  }
+
+  /* pop-in for freshly spawned nodes */
+  @keyframes pop{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.2);}
+    60%{opacity:1;transform:translate(-50%,-50%) scale(1.12);}
+    100%{transform:translate(-50%,-50%) scale(1);}
+  }
+  .node.pop{animation:pop .6s cubic-bezier(.3,1.3,.5,1);}
+
+  /* add-your-thanks node */
+  .node.add .stamp{
+    width:74px;height:74px;border-radius:50%;
+    border:2px dashed rgba(255,255,255,.55);
+    background:#2F0314;
+    display:grid;place-items:center;
+    transition:border-color .2s, background .2s;
+  }
+  .node.add .stamp::before{
+    content:"";width:22px;height:2.5px;background:var(--cream);border-radius:2px;
+    position:absolute;
+  }
+  .node.add .stamp::after{
+    content:"";height:22px;width:2.5px;background:var(--cream);border-radius:2px;
+    position:absolute;
+  }
+  .node.add:hover .stamp{border-color:var(--gold);background:rgba(255,180,80,.12);}
+  .node.add .pill{background:var(--cream);color:var(--pill);}
+
+  /* cluster lead — morphs between stacked stamp ("+N others") and a single stamp */
+  .node.cluster-lead .stamp{position:relative;width:66px;height:66px;}
+  .node.cluster-lead .stamp img{
+    position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+    transition:opacity .45s ease;filter:drop-shadow(0 6px 12px rgba(0,0,0,.45));
+  }
+  .node.cluster-lead .s-solo{opacity:0;}
+  .node.cluster-lead.expanded-look .s-stack{opacity:0;}
+  .node.cluster-lead.expanded-look .s-solo{opacity:1;}
+
+  /* cluster members fly out from the lead on zoom-in, collapse back on zoom-out */
+  .node.member{transition:transform .55s cubic-bezier(.2,.9,.3,1), opacity .45s ease;}
+  .node.member.collapsed{
+    transform:translate(calc(-50% + var(--cx,0px)), calc(-50% + var(--cy,0px))) scale(.28);
+    opacity:0;pointer-events:none;
+  }
+
+  /* ---------- fixed UI ---------- */
+  .topbar{
+    position:absolute;top:0;left:0;right:0;z-index:30;pointer-events:none;line-height:0;
+  }
+  .topbar img{
+    display:block;width:100%;height:auto;
+    filter:drop-shadow(0 6px 16px rgba(0,0,0,.35));
+  }
+
+  /* live "just sent a thank you" strip — sits just under the header, swaps text
+     as new thank-yous land. This is the calm live signal (replaces a busy counter). */
+  .msg-ticker{
+    position:absolute;top:108px;left:50%;transform:translateX(-50%);
+    z-index:25;pointer-events:none;max-width:84%;
+    display:flex;align-items:center;gap:6px;
+    background:#280b16;border:1px solid rgba(255,210,107,.32);
+    color:var(--cream);font-size:11.5px;font-weight:600;line-height:1.2;
+    padding:7px 13px;border-radius:10px;white-space:nowrap;
+    box-shadow:0 6px 18px rgba(0,0,0,.4);
+    transition:opacity .38s ease, transform .38s ease;
+  }
+  .msg-ticker .who{color:var(--gold);font-weight:800;}
+  .msg-ticker.swap{opacity:0;transform:translateX(-50%) translateY(-6px);}
+
+  /* music mute toggle */
+  .sound-toggle{
+    position:absolute;top:108px;right:14px;z-index:30;
+    width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.1);
+    background:rgba(30,7,16,.78);color:var(--cream);cursor:pointer;
+    display:grid;place-items:center;backdrop-filter:blur(8px);
+    box-shadow:0 6px 18px rgba(0,0,0,.4);transition:background .15s, transform .12s;
+  }
+  .sound-toggle:active{transform:scale(.92);}
+  .sound-toggle svg{width:20px;height:20px;}
+  .sound-toggle .ic-off{display:none;}
+  .sound-toggle.muted .ic-on{display:none;}
+  .sound-toggle.muted .ic-off{display:block;color:rgba(252,249,247,.6);}
+
+  /* press-bounce when a node is tapped */
+  @keyframes tapPop{0%{transform:scale(1);}40%{transform:scale(.88);}100%{transform:scale(1);}}
+  .stamp.tapped{animation:tapPop .26s ease;}
+
+  /* bottom bar — solid fill with rounded top corners (not a gradient fade) */
+  .bottombar{
+    position:absolute;left:0;right:0;bottom:0;z-index:30;
+    padding:20px 18px calc(18px + env(safe-area-inset-bottom));
+    background:#2c0a18;
+    border-radius:26px 26px 0 0;
+    box-shadow:0 -10px 34px rgba(0,0,0,.45);
+    display:flex;flex-direction:column;align-items:center;gap:12px;
+  }
+  .counter-row{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .counter-top{display:flex;align-items:center;gap:10px;}
+  .live-badge{
+    background:var(--red);color:#fff;font-size:12px;font-weight:800;letter-spacing:.6px;
+    padding:5px 11px;border-radius:9px;display:flex;align-items:center;gap:5px;
+  }
+  .live-badge .blip{width:7px;height:7px;border-radius:50%;background:#fff;
+    animation:blipFade 2.6s ease-in-out infinite;}
+  @keyframes blipFade{0%,100%{opacity:.45;}50%{opacity:1;}}
+  .count-pill{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:800;
+    color:var(--cream);font-variant-numeric:tabular-nums;
+    background:#190610;padding:6px 14px;border-radius:10px;}
+  .count-pill svg{opacity:.85;}
+  .counter-sub{font-size:13px;color:rgba(252,249,247,.78);}
+  .counter-sub b{color:var(--cream);}
+  .send-btn{
+    width:100%;max-width:520px;border:0;cursor:pointer;
+    background:linear-gradient(135deg,var(--gold) 0%,var(--gold-2) 100%);
+    color:var(--ink);font-family:var(--ui-font);font-size:17px;font-weight:800;
+    padding:16px;border-radius:15px;
+    box-shadow:0 8px 22px rgba(255,160,60,.4);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .send-btn:active{transform:translateY(1px) scale(.99);}
+
+  /* map controls */
+  .zoom-ctrl{
+    position:absolute;right:16px;bottom:190px;z-index:30;
+    display:flex;flex-direction:column;
+    background:rgba(30,7,16,.78);border:1px solid rgba(255,255,255,.1);
+    border-radius:13px;overflow:hidden;backdrop-filter:blur(8px);
+    box-shadow:0 6px 18px rgba(0,0,0,.4);
+  }
+  .zoom-ctrl button{
+    width:46px;height:46px;border:0;background:transparent;color:var(--cream);
+    font-size:24px;font-weight:500;cursor:pointer;display:grid;place-items:center;
+    transition:background .15s;
+  }
+  .zoom-ctrl button:active{background:rgba(255,255,255,.12);}
+  .zoom-ctrl .sep{height:1px;background:rgba(255,255,255,.12);}
+
+  .recenter{
+    position:absolute;left:50%;bottom:200px;transform:translateX(-50%) translateY(10px);
+    z-index:30;display:flex;align-items:center;gap:8px;
+    background:var(--cream);color:var(--pill);
+    font-size:14px;font-weight:700;padding:10px 16px;border-radius:999px;border:0;
+    box-shadow:0 6px 18px rgba(0,0,0,.35);cursor:pointer;
+    opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;
+  }
+  .recenter.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0);}
+  .recenter svg{width:16px;height:16px;}
+
+  /* dead-end marker: lives in world-space directly below the two + slots */
+  .dead-end{
+    position:absolute;left:0;top:300px;transform:translate(-50%,-50%);
+    background:rgba(20,5,12,.66);color:rgba(252,249,247,.82);
+    font-size:15px;font-weight:600;text-align:center;line-height:1.4;
+    padding:13px 18px;border-radius:14px;backdrop-filter:blur(3px);
+    pointer-events:none;white-space:nowrap;
+    box-shadow:0 6px 18px rgba(0,0,0,.3);
+  }
+
+  /* ---------- onboarding overlay ---------- */
+  .overlay{
+    position:absolute;inset:0;z-index:60;display:grid;place-items:center;
+    background:rgba(12,3,8,.78);backdrop-filter:blur(6px);
+    transition:opacity .4s;padding:24px;
+  }
+  .overlay.hide{opacity:0;pointer-events:none;}
+  .onb-card{
+    width:min(90vw,360px);background:linear-gradient(180deg,#3a0d20,#290915);
+    border:1px solid rgba(255,210,107,.22);border-radius:24px;padding:24px;
+    text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5);
+    animation:cardin .45s cubic-bezier(.2,1,.4,1);
+  }
+  @keyframes cardin{from{opacity:0;transform:translateY(24px) scale(.96);}to{opacity:1;transform:none;}}
+  .onb-card .gif-wrap{
+    border-radius:18px;overflow:hidden;margin-bottom:18px;background:#240813;
+    border:1px solid rgba(255,255,255,.08);
+  }
+  .onb-card img{width:100%;height:auto;}
+  .onb-card h2{margin:0 0 8px;font-size:20px;font-weight:800;}
+  .onb-card p{margin:0 0 20px;font-size:14px;line-height:1.5;color:rgba(252,249,247,.78);}
+  .onb-card .got{
+    width:100%;border:0;cursor:pointer;
+    background:linear-gradient(135deg,var(--gold),var(--gold-2));color:var(--ink);
+    font-family:var(--ui-font);font-weight:800;font-size:16px;padding:14px;border-radius:14px;
+  }
+  .pinch-emoji{font-size:13px;color:var(--gold);font-weight:700;margin-bottom:14px;display:flex;gap:18px;justify-content:center;}
+
+  /* ---------- send modal (bottom sheet) ---------- */
+  .sheet-scrim{
+    position:absolute;inset:0;z-index:70;background:rgba(10,3,7,.6);
+    opacity:0;pointer-events:none;transition:opacity .3s;
+  }
+  .sheet-scrim.show{opacity:1;pointer-events:auto;}
+  .sheet{
+    position:absolute;left:0;right:0;bottom:0;transform:translateY(100%);
+    z-index:71;
+    background:linear-gradient(180deg,#3a0d20,#250813);
+    border-radius:26px 26px 0 0;border-top:1px solid rgba(255,210,107,.2);
+    box-shadow:0 -16px 50px rgba(0,0,0,.5);
+    padding:10px 22px calc(24px + env(safe-area-inset-bottom));
+    transition:transform .36s cubic-bezier(.2,.9,.3,1);
+    max-height:90%;overflow-y:auto;
+  }
+  .sheet.show{transform:translateY(0);}
+  .sheet .grip{width:42px;height:4px;border-radius:3px;background:rgba(255,255,255,.25);
+    margin:6px auto 16px;}
+  .sheet h2{margin:0 0 6px;font-size:21px;font-weight:800;}
+  .sheet .sub{margin:0 0 18px;font-size:14px;color:rgba(252,249,247,.72);line-height:1.45;}
+  .friend-row{display:flex;gap:10px;margin-bottom:10px;align-items:center;}
+  .friend-row input{
+    flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    border-radius:12px;padding:13px 14px;color:var(--cream);font-size:15px;font-family:var(--ui-font);
+    outline:none;transition:border-color .15s, background .15s;
+  }
+  .friend-row input::placeholder{color:rgba(252,249,247,.4);}
+  .friend-row input:focus{border-color:var(--gold);background:rgba(255,255,255,.09);}
+  .friend-row .city{flex:0 0 96px;}
+  .friend-row .rm{
+    flex:0 0 auto;width:34px;height:34px;border-radius:10px;border:0;cursor:pointer;
+    background:rgba(255,255,255,.07);color:rgba(252,249,247,.6);font-size:18px;line-height:1;
+  }
+  .friend-row .rm:hover{background:rgba(212,77,77,.25);color:#fff;}
+  .add-more{
+    background:none;border:1px dashed rgba(255,210,107,.4);color:var(--gold);
+    font-family:var(--ui-font);font-weight:700;font-size:14px;cursor:pointer;
+    padding:11px;border-radius:12px;width:100%;margin:2px 0 16px;
+  }
+  .sheet textarea{
+    width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    border-radius:12px;padding:13px 14px;color:var(--cream);font-size:15px;
+    font-family:var(--ui-font);outline:none;resize:none;min-height:74px;margin-bottom:8px;
+  }
+  .sheet textarea:focus{border-color:var(--gold);}
+  .hint-line{font-size:12.5px;color:rgba(252,249,247,.6);margin:0 0 16px;display:flex;align-items:center;gap:6px;}
+  .hint-line.ok{color:var(--green);}
+  .sheet .submit{
+    width:100%;border:0;cursor:pointer;
+    background:linear-gradient(135deg,var(--gold),var(--gold-2));color:var(--ink);
+    font-family:var(--ui-font);font-weight:800;font-size:17px;padding:16px;border-radius:15px;
+    transition:opacity .2s, transform .1s;
+  }
+  .sheet .submit:disabled{opacity:.4;cursor:not-allowed;}
+  .sheet .submit:not(:disabled):active{transform:translateY(1px);}
+
+  /* toast */
+  .toast{
+    position:absolute;left:50%;bottom:230px;transform:translateX(-50%) translateY(16px);
+    z-index:80;background:rgba(20,5,12,.92);border:1px solid rgba(255,210,107,.3);
+    color:var(--cream);font-size:14px;font-weight:700;padding:13px 20px;border-radius:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;
+    transition:opacity .3s, transform .3s;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:420px){
+    .zoom-ctrl{bottom:178px;}
+    .recenter{bottom:188px;}
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+  <div id="viewport">
+    <div id="world">
+        <img class="grid-globe" src="Grid.svg" alt="" />
+      <svg id="threads" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffd36b"/>
+            <stop offset="50%" stop-color="#e9b24a"/>
+            <stop offset="100%" stop-color="#caa23f"/>
+          </linearGradient>
+          <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3"/>
+          </filter>
+        </defs>
+        <g id="g-glow"></g>
+        <g id="g-ribbon"></g>
+        <g id="g-shimmer"></g>
+      </svg>
+      <div id="nodes"></div>
+      <!-- dead-end / void marker, sits below the two + slots in world-space -->
+      <div class="dead-end" id="deadEnd">Say a thanks to<br/>keep the chain going</div>
+    </div>
+  </div>
+
+  <!-- top logo bar: single edge-to-edge BG.png (panel + notch + logo baked in) -->
+  <div class="topbar">
+    <img src="BG.png" alt="Golden Thank You Week" />
+  </div>
+
+  <!-- live message strip: updates as new thank-yous land -->
+  <div class="msg-ticker" id="msgTicker">
+    <span class="who">Nikhil, PUN</span> just sent a thank you 💌
+  </div>
+
+  <!-- ambient background music + mute toggle -->
+  <audio id="bgm" src="elegant-piano.mp3" loop preload="auto"></audio>
+  <button class="sound-toggle" id="soundToggle" aria-label="Toggle music">
+    <svg class="ic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M16 8.5a4 4 0 0 1 0 7"/><path d="M19 5.5a8 8 0 0 1 0 13"/>
+    </svg>
+    <svg class="ic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 9v6h4l5 4V5L7 9H3z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/>
+    </svg>
+  </button>
+
+  <!-- map controls -->
+  <div class="zoom-ctrl">
+    <button id="zoomIn" aria-label="Zoom in">+</button>
+    <div class="sep"></div>
+    <button id="zoomOut" aria-label="Zoom out">−</button>
+  </div>
+  <button class="recenter" id="recenter">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3.2"/><line x1="12" y1="2" x2="12" y2="6"/>
+      <line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/>
+      <line x1="18" y1="12" x2="22" y2="12"/>
+    </svg>
+    Back to center
+  </button>
+
+  <!-- bottom bar -->
+  <div class="bottombar">
+    <div class="counter-row">
+      <div class="counter-top">
+        <span class="live-badge"><span class="blip"></span>LIVE</span>
+        <span class="count-pill">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span id="counter">1,20,465</span>
+        </span>
+      </div>
+      <div class="counter-sub"><b>thank yous</b> travelling across India.</div>
+    </div>
+    <button class="send-btn" id="openSend">Send a Thank You</button>
+  </div>
+
+  <!-- onboarding -->
+  <div class="overlay" id="overlay">
+    <div class="onb-card">
+      <div class="gif-wrap"><img src="Zoom%20In.gif" alt="Zoom hint" /></div>
+      <div class="pinch-emoji"><span>🔍 Scroll / pinch to zoom</span></div>
+      <h2>Explore the Gratitude Chain</h2>
+      <p>Zoom out to see thank-yous clustering across India. Zoom in to reveal each one. Drag to wander the chain.</p>
+      <button class="got" id="gotIt">Got it</button>
+    </div>
+  </div>
+
+  <!-- send sheet -->
+  <div class="sheet-scrim" id="sheetScrim"></div>
+  <div class="sheet" id="sheet">
+    <div class="grip"></div>
+    <h2>Send a Thank You</h2>
+    <p class="sub">Add at least 2 people you're grateful for — your thanks join the chain instantly. ✨</p>
+    <div id="friendList"></div>
+    <button class="add-more" id="addMore">+ Add another person</button>
+    <textarea id="msg" placeholder="Write a little note of thanks…">Thank you for always being there for me 🙏</textarea>
+    <p class="hint-line" id="hintLine">Add 2 more people to send.</p>
+    <button class="submit" id="submitThanks" disabled>Send Thanks</button>
+  </div>
+
+  <div class="toast" id="toast">Your thanks are travelling the chain ✨</div>
+  </div><!-- /#app -->
+
+<script>
+/* ================================================================= *
+ *  GULLAK GRATITUDE CHAIN  —  engine
+ * ================================================================= */
+
+/* ---------- seeded RNG (stable layout across reloads) ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+let rnd = mulberry32(20260615);
+const rr=(a,b)=>a+(b-a)*rnd();
+const ri=(a,b)=>Math.floor(rr(a,b+1));
+const pick=arr=>arr[Math.floor(rnd()*arr.length)];
+
+/* ---------- assets ---------- */
+const STAMPS=["Theme=Birds.png","Theme=Tea%20Time.png","Theme=Kites.png","Theme=Light.png","Theme=Flowers.png"];
+const CLUSTER_STAMPS={few:"Theme=Three.png",many:"Theme=Fours.png"};
+const SEED_STAMP="Theme=Gullak.png";
+
+/* ---------- name data ---------- */
+const NAMES=["Aarav","Ananya","Vihaan","Diya","Arjun","Saanvi","Reyansh","Aadhya","Krishna","Anika","Ishaan","Myra","Kabir","Aarohi","Riya","Vivaan","Navya","Aditya","Kiara","Rohan","Dev","Meera","Aryan","Tara","Nikhil","Pooja","Karan","Sneha","Manish","Divya","Suraj","Geeta","Akshay","Nisha","Deepak","Trisha","Rutuja","Manthan","Aakash","Neel","Dipanshu","Vijay","Eswari","Hemal","Arindam","Sushma","Nupur","Shobhit","Rashi","Sahar","Priya","Seema","Amit","Manju","Aruna","Nirmal","Suhail","Gauresh","Reva","Vihana"];
+const CITIES=["HYD","BLR","MUM","DEL","PUN","CHN","KOL","JAI","UP","RJ","KL","CHD","AHM","LKO","IND"];
+let nameBag=[...NAMES];
+function nextName(){ if(!nameBag.length) nameBag=[...NAMES]; const i=Math.floor(rnd()*nameBag.length); return nameBag.splice(i,1)[0]; }
+
+/* ---------- world constants ---------- */
+const WORLD={minX:-2600,minY:-1700,maxX:2600,maxY:1700};
+const W=WORLD.maxX-WORLD.minX, H=WORLD.maxY-WORLD.minY;
+const TIER_SCALE=[0,0.5,1.35];            // scale at which each detail tier appears
+const EXPAND=0.95;                         // at/above this scale, clusters break into members
+const MIN_SCALE=0.3, MAX_SCALE=2.8;
+
+/* ---------- node / edge state ---------- */
+// node: {id,x,y,tier,kind,name,city,stamp,el, isLead?,isMember?,clusterId, cx,cy,
+//        stampStack,stampSolo,collapsedLabel,expandedLabel}
+// edge: {a,b,mode}  mode: 'always' | 'expanded' (only drawn when clusters are expanded)
+let nodes=[];
+let edges=[];
+let idc=0;
+const byId={};
+function addNode(o){ o.id="n"+(idc++); nodes.push(o); byId[o.id]=o; return o; }
+function addEdge(a,b,mode){ edges.push({a,b,mode:mode||"always"}); }
+
+/* ---------- layout helpers ---------- */
+// the lower-centre band below "You" stays empty — that's the void you fill
+function inVoid(x,y){ return Math.abs(x)<520 && y>110; }
+// minimum centre-to-centre spacing for a pair (You/Gullak get more breathing room)
+function pairMin(a,b){
+  if(a.kind==="you"||b.kind==="you"||a.kind==="seed"||b.kind==="seed") return 250;
+  if(a.kind==="add"||b.kind==="add") return 205;
+  return 178;
+}
+
+/* Force-relax the EXPANDED layout so no two stamps overlap, while keeping the
+   chain's structure: members stay a fixed radius from their lead, hand-placed
+   anchors stay near their composition, and the void band stays clear. */
+function relaxLayout(iterations){
+  const parentOf={}; edges.forEach(e=>{ parentOf[e.b]=e.a; });
+  const rest={};
+  nodes.forEach(n=>{ const p=byId[parentOf[n.id]]; rest[n.id]=p?Math.hypot(n.x-p.x,n.y-p.y):0; n._ox=n.x; n._oy=n.y; });
+  const pinned=n=>n.kind==="you"||n.kind==="add"||n.kind==="seed";
+  for(let it=0; it<iterations; it++){
+    const fx={}, fy={};
+    for(let i=0;i<nodes.length;i++){
+      const a=nodes[i];
+      for(let j=i+1;j<nodes.length;j++){
+        const b=nodes[j];
+        let dx=a.x-b.x, dy=a.y-b.y, d=Math.hypot(dx,dy)||0.01, mn=pairMin(a,b);
+        if(d<mn){
+          const push=(mn-d)/d*0.5, ux=dx*push, uy=dy*push;
+          fx[a.id]=(fx[a.id]||0)+ux; fy[a.id]=(fy[a.id]||0)+uy;
+          fx[b.id]=(fx[b.id]||0)-ux; fy[b.id]=(fy[b.id]||0)-uy;
+        }
+      }
+    }
+    nodes.forEach(n=>{
+      if(pinned(n)) return;
+      if(n.isMember || n.tier>=1){                 // spring to structural parent
+        const p=byId[parentOf[n.id]];
+        if(p){ let dx=n.x-p.x,dy=n.y-p.y,d=Math.hypot(dx,dy)||0.01,diff=d-rest[n.id];
+          fx[n.id]=(fx[n.id]||0)-dx/d*diff*0.08; fy[n.id]=(fy[n.id]||0)-dy/d*diff*0.08; }
+      }
+      if(n.tier===0 && !n.isMember){               // anchors keep their composition
+        fx[n.id]=(fx[n.id]||0)+(n._ox-n.x)*0.05; fy[n.id]=(fy[n.id]||0)+(n._oy-n.y)*0.05;
+      }
+      if(inVoid(n.x,n.y)){                          // keep the void clear
+        fy[n.id]=(fy[n.id]||0)-24; fx[n.id]=(fx[n.id]||0)+(n.x>=0?16:-16);
+      }
+    });
+    nodes.forEach(n=>{
+      if(pinned(n)) return;
+      let dx=fx[n.id]||0, dy=fy[n.id]||0, m=Math.hypot(dx,dy);
+      if(m>42){ dx=dx/m*42; dy=dy/m*42; }
+      n.x+=dx; n.y+=dy;
+    });
+  }
+  nodes.forEach(n=>{ if(n.isMember){ const p=byId[parentOf[n.id]]; if(p){ n.cx=p.x-n.x; n.cy=p.y-n.y; } } });
+}
+
+function buildChain(){
+  // Gullak is the origin — it sits just above You and most of the chain radiates
+  // from it. You hangs off Gullak, with the add-slots and void below.
+  const gullak=addNode({x:-60,y:-400,tier:0,kind:"seed",name:"Gullak",stamp:SEED_STAMP});
+  const you=addNode({x:0,y:0,tier:0,kind:"you",name:"You",stamp:"Theme=Light.png"});
+  addEdge(gullak.id,you.id);
+  const add1=addNode({x:-115,y:188,tier:0,kind:"add"});
+  const add2=addNode({x:115,y:188,tier:0,kind:"add"});
+  addEdge(you.id,add1.id);   // golden threads reaching into the void
+  addEdge(you.id,add2.id);
+
+  // people YOU thanked — ringed around You so the centre stays populated
+  [[-300,-50],[300,-60],[-220,-205],[230,-200],[-285,95],[285,85],[-95,-235],[110,-240]]
+    .forEach(([ix,iy])=> addSolo(ix,iy,you.id,0));
+
+  // THE COMMUNITY — fans out from Gullak, the heart where everything begins.
+  // Spread up and to the sides; the band directly below You stays the void.
+  const t0=[
+    {x:-1080,y:-470,c:1},
+    {x:-740,y:-660,c:1},
+    {x:-760,y:-240,c:0},
+    {x:-1060,y:-140,c:1},
+    {x:-260,y:-770,c:0},
+    {x:300,y:-730,c:1},
+    {x:640,y:-560,c:1},
+    {x:1000,y:-470,c:1},
+    {x:780,y:-220,c:0},
+    {x:1140,y:-170,c:1},
+    {x:440,y:-300,c:0},
+  ];
+  t0.forEach(a=>{ a.c?makeCluster(a.x,a.y,gullak.id,0):addSolo(a.x,a.y,gullak.id,0); });
+
+  // procedurally branch finer detail off existing non-member anchors
+  generateDetail(1,14,[240,380]);
+  generateDetail(2,12,[200,320]);
+}
+
+function addSolo(x,y,parentId,tier){
+  const n=addNode({x,y,tier,kind:"solo",name:nextName(),city:pick(CITIES),stamp:pick(STAMPS)});
+  addEdge(parentId,n.id);
+  return n;
+}
+
+// candidate parents = anything that stays present in the collapsed view
+function parentCandidates(maxTier){
+  return nodes.filter(n=>!n.isMember && n.kind!=="add" && n.tier<=maxTier);
+}
+function generateDetail(tier,count,distRange){
+  let made=0,attempts=0;
+  while(made<count && attempts<count*14){
+    attempts++;
+    const cands=parentCandidates(tier-1);
+    const parent=pick(cands.length?cands:parentCandidates(0));
+    const ang=rr(0,Math.PI*2), dist=rr(distRange[0],distRange[1]);
+    const x=parent.x+Math.cos(ang)*dist, y=parent.y+Math.sin(ang)*dist*0.85;
+    if(x<WORLD.minX+200||x>WORLD.maxX-200||y<WORLD.minY+200||y>WORLD.maxY-200) continue;
+    if(inVoid(x,y)) continue;
+    if(nodes.some(m=>Math.hypot(m.x-x,m.y-y)<150)) continue;
+    if(rnd()<0.25) makeCluster(x,y,parent.id,tier);
+    else addSolo(x,y,parent.id,tier);
+    made++;
+  }
+}
+// a cluster = a lead node (always at the anchor) + (count-1) members that sit on
+// top of the lead when collapsed and fan OUT into open space when zoomed in.
+function makeCluster(x,y,parentId,tier){
+  const count=ri(3,5), lead=nextName(), cid="c"+idc;
+  const leadNode=addNode({x,y,tier,kind:"cluster",isLead:true,clusterId:cid,
+    name:lead,city:pick(CITIES),
+    stampStack:count>=4?CLUSTER_STAMPS.many:CLUSTER_STAMPS.few,stampSolo:pick(STAMPS),
+    collapsedLabel:`${lead} +${count-1} others`});
+  leadNode.expandedLabel=`${lead}, ${leadNode.city}`;
+  addEdge(parentId,leadNode.id);
+  const par=byId[parentId];
+  const base=Math.atan2(y-(par?par.y:0),x-(par?par.x:0));   // fan away from parent
+  for(let i=1;i<count;i++){
+    let mx,my,ok=false;
+    for(let t=0;t<26&&!ok;t++){
+      const ang=base+rr(-1.3,1.3), rad=rr(180,255);
+      mx=x+Math.cos(ang)*rad; my=y+Math.sin(ang)*rad*0.9;
+      ok=!inVoid(mx,my) && !nodes.some(m=>Math.hypot(m.x-mx,m.y-my)<150);
+    }
+    const m=addNode({x:mx,y:my,tier,kind:"solo",isMember:true,clusterId:cid,
+      name:nextName(),city:pick(CITIES),stamp:pick(STAMPS),cx:x-mx,cy:y-my});
+    addEdge(leadNode.id,m.id,"expanded");
+  }
+  return leadNode;
+}
+
+/* ---------- render nodes ---------- */
+const nodesEl=document.getElementById("nodes");
+function renderNodes(){
+  const frag=document.createDocumentFragment();
+  nodes.forEach(n=>{ if(!n.el){ n.el=makeNodeEl(n); frag.appendChild(n.el);} });
+  nodesEl.appendChild(frag);
+}
+function makeNodeEl(n){
+  const el=document.createElement("div");
+  el.style.left=n.x+"px"; el.style.top=n.y+"px";
+
+  if(n.kind==="add"){
+    el.className="node add";
+    el.innerHTML=`<div class="stamp"></div><div class="pill">Add your thanks</div>`;
+    el.addEventListener("click",openSheet);
+    return el;
+  }
+
+  if(n.isLead){
+    // morphing cluster lead: stacked stamp + "+N others" when collapsed,
+    // individual stamp + "name, city" when expanded (crossfaded)
+    el.className="node cluster-lead collapsed-look";
+    el.innerHTML=
+      `<div class="stamp"><span class="ping"></span>`+
+        `<img class="s-stack" src="${n.stampStack}" alt="">`+
+        `<img class="s-solo" src="${n.stampSolo}" alt=""></div>`+
+      `<div class="pill cluster" data-role="label">${n.collapsedLabel}</div>`+
+      `<div class="live-tag"><span class="dot"></span>Just now</div>`;
+    return el;
+  }
+
+  // solo / seed / you / cluster-member
+  el.className="node "+n.kind+(n.isMember?" member collapsed":"");
+  if(n.isMember){ el.style.setProperty("--cx",n.cx+"px"); el.style.setProperty("--cy",n.cy+"px"); }
+  const pillCls = n.kind==="you"?"pill you":n.kind==="seed"?"pill seed":"pill";
+  const label = n.kind==="you"?"You" : n.kind==="seed"?"Gullak" : `${n.name}, ${n.city}`;
+  el.innerHTML=
+    `<div class="stamp"><span class="ping"></span><img src="${n.stamp}" alt=""></div>`+
+    `<div class="${pillCls}">${label}</div>`+
+    `<div class="live-tag"><span class="dot"></span>Just now</div>`;
+  return el;
+}
+
+/* ---------- threads (golden brush ribbons) ---------- */
+const svg=document.getElementById("threads");
+const gGlow=document.getElementById("g-glow");
+const gRib=document.getElementById("g-ribbon");
+const gShim=document.getElementById("g-shimmer");
+function setupSvgFrame(){
+  svg.setAttribute("viewBox",`${WORLD.minX} ${WORLD.minY} ${W} ${H}`);
+  svg.style.left=WORLD.minX+"px"; svg.style.top=WORLD.minY+"px";
+  svg.style.width=W+"px"; svg.style.height=H+"px";
+  const globe=document.querySelector(".grid-globe");
+  globe.style.width="3800px"; globe.style.left="-1900px"; globe.style.top="-1150px";
+}
+
+function bezier(p0,p3,seed){
+  const dx=p3.x-p0.x, dy=p3.y-p0.y, len=Math.hypot(dx,dy)||1;
+  const nx=-dy/len, ny=dx/len;             // perpendicular
+  const s=mulberry32(seed);
+  // pronounced organic curvature: mostly bowed arcs, some S-curves
+  const dir=s()<0.5?-1:1;
+  const bow=len*(0.22+s()*0.34);           // overall sweep of the curve
+  const sCurve=s()<0.34;                    // occasionally flip the 2nd control → S shape
+  const a1=dir*bow*(0.75+s()*0.5);
+  const a2=(sCurve?-dir:dir)*bow*(0.75+s()*0.5);
+  const c1={x:p0.x+dx/3+nx*a1, y:p0.y+dy/3+ny*a1};
+  const c2={x:p0.x+dx*2/3+nx*a2, y:p0.y+dy*2/3+ny*a2};
+  return {p0,c1,c2,p3,nx,ny,len,seed};
+}
+function centerPath(b){
+  return `M${b.p0.x.toFixed(1)},${b.p0.y.toFixed(1)} C${b.c1.x.toFixed(1)},${b.c1.y.toFixed(1)} ${b.c2.x.toFixed(1)},${b.c2.y.toFixed(1)} ${b.p3.x.toFixed(1)},${b.p3.y.toFixed(1)}`;
+}
+
+let curTier=0, curExpanded=false;
+// members exist only when clusters are expanded; everything else gates on detail tier
+function nodeVisible(n){
+  if(n.isMember) return curExpanded;
+  return n.tier<=curTier;
+}
+
+function rebuildThreads(){
+  let glow="",rib="",shim="";
+  edges.forEach((e,i)=>{
+    if(e.mode==="expanded" && !curExpanded) return;   // member spokes only when spread out
+    const a=byId[e.a], b=byId[e.b];
+    if(!a||!b) return;
+    if(!nodeVisible(a)||!nodeVisible(b)) return;
+    const bz=bezier({x:a.x,y:a.y},{x:b.x,y:b.y}, 1000+i*7+a.x|0);
+    const cp=centerPath(bz);
+    glow+=`<path class="glow" d="${cp}"/>`;
+    rib +=`<path class="thread" d="${cp}"/>`;
+    shim+=`<path class="shimmer" pathLength="100" d="${cp}" style="animation-delay:${(i*0.37%5.5).toFixed(2)}s"/>`;
+  });
+  gGlow.innerHTML=glow; gRib.innerHTML=rib; gShim.innerHTML=shim;
+}
+
+/* ---------- visibility: detail tier + cluster expansion ---------- */
+function refreshVisibility(){
+  nodes.forEach(n=>{
+    if(n.isMember){
+      // spread out (remove .collapsed) when expanded, fly back to lead when not
+      n.el.classList.toggle("collapsed", !curExpanded);
+      return;
+    }
+    if(n.isLead){
+      // morph the lead's stamp + label between cluster and individual looks
+      n.el.classList.toggle("expanded-look", curExpanded);
+      n.el.classList.toggle("collapsed-look", !curExpanded);
+      const lab=n.el.querySelector("[data-role=label]");
+      if(lab) lab.textContent = curExpanded ? n.expandedLabel : n.collapsedLabel;
+      return;
+    }
+    n.el.classList.toggle("hidden", !(n.tier<=curTier));
+  });
+}
+function updateZoomState(scale){
+  let t=0;
+  if(scale>=TIER_SCALE[2]) t=2;
+  else if(scale>=TIER_SCALE[1]) t=1;
+  const ex=scale>=EXPAND;
+  if(t!==curTier || ex!==curExpanded){ curTier=t; curExpanded=ex; refreshVisibility(); rebuildThreads(); }
+}
+
+/* ---------- pan / zoom ---------- */
+const viewport=document.getElementById("viewport");
+const world=document.getElementById("world");
+let tx=0,ty=0,scale=1, home={tx:0,ty:0,scale:1};
+function apply(){
+  world.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
+  updateZoomState(scale);
+  updateRecenter();
+}
+function computeHome(){
+  const vw=viewport.clientWidth, vh=viewport.clientHeight;
+  home.scale=0.85;         // start zoomed-in a touch more; clusters still grouped (< EXPAND)
+  home.tx=vw/2;            // world (0,0)=You sits at horizontal center
+  home.ty=vh*0.57;         // drop You a little lower; more chain shows above
+}
+// pointer coords relative to the viewport frame (not the window)
+function localXY(clientX,clientY){
+  const r=viewport.getBoundingClientRect();
+  return {x:clientX-r.left, y:clientY-r.top};
+}
+function goHome(animate=true){
+  computeHome();
+  animateTo(home.tx,home.ty,home.scale,animate?620:0);
+}
+function clampScale(s){return Math.min(MAX_SCALE,Math.max(MIN_SCALE,s));}
+
+function zoomAt(cx,cy,factor){
+  const ns=clampScale(scale*factor);
+  const wx=(cx-tx)/scale, wy=(cy-ty)/scale;
+  scale=ns; tx=cx-wx*scale; ty=cy-wy*scale;
+  apply();
+}
+
+// wheel zoom
+viewport.addEventListener("wheel",e=>{
+  e.preventDefault();
+  const f=Math.exp(-e.deltaY*0.0016);
+  const p=localXY(e.clientX,e.clientY);
+  zoomAt(p.x,p.y,f);
+},{passive:false});
+
+// pointer pan + pinch
+const pointers=new Map();
+let panActive=false,last={x:0,y:0},pinchPrev=0,moved=0;
+viewport.addEventListener("pointerdown",e=>{
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===1){ panActive=true; moved=0; last={x:e.clientX,y:e.clientY}; viewport.classList.add("grabbing"); viewport.setPointerCapture(e.pointerId);}
+  else if(pointers.size===2){ panActive=false; pinchPrev=pinchDist(); }
+});
+viewport.addEventListener("pointermove",e=>{
+  if(!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){
+    const d=pinchDist();
+    if(pinchPrev>0){ const c=pinchCenter(),p=localXY(c.x,c.y); zoomAt(p.x,p.y,d/pinchPrev); }
+    pinchPrev=d; return;
+  }
+  if(panActive){
+    const dx=e.clientX-last.x, dy=e.clientY-last.y;
+    tx+=dx; ty+=dy; moved+=Math.abs(dx)+Math.abs(dy);
+    last={x:e.clientX,y:e.clientY};
+    apply();
+  }
+});
+function endPtr(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) pinchPrev=0;
+  if(pointers.size===0){ panActive=false; viewport.classList.remove("grabbing"); }
+  if(pointers.size===1){ const p=[...pointers.values()][0]; last={x:p.x,y:p.y}; panActive=true; }
+}
+viewport.addEventListener("pointerup",endPtr);
+viewport.addEventListener("pointercancel",endPtr);
+function pinchDist(){const p=[...pointers.values()];return Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y);}
+function pinchCenter(){const p=[...pointers.values()];return {x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2};}
+
+// zoom buttons
+document.getElementById("zoomIn").onclick=()=>zoomAt(viewport.clientWidth/2,viewport.clientHeight*0.42,1.3);
+document.getElementById("zoomOut").onclick=()=>zoomAt(viewport.clientWidth/2,viewport.clientHeight*0.42,1/1.3);
+
+// recenter
+const recenterBtn=document.getElementById("recenter");
+recenterBtn.onclick=()=>goHome(true);
+function updateRecenter(){
+  const off=Math.abs(tx-home.tx)+Math.abs(ty-home.ty)>90 || Math.abs(scale-home.scale)>0.06;
+  recenterBtn.classList.toggle("show",off);
+}
+
+// smooth animated transition
+let animId=0;
+function animateTo(nx,ny,ns,dur){
+  cancelAnimationFrame(animId);
+  if(dur<=0){ tx=nx;ty=ny;scale=ns;apply();return; }
+  const sx=tx,sy=ty,ss=scale,t0=performance.now();
+  const ease=t=>1-Math.pow(1-t,3);
+  (function step(now){
+    const k=Math.min(1,(now-t0)/dur), e=ease(k);
+    tx=sx+(nx-sx)*e; ty=sy+(ny-sy)*e; scale=ss+(ns-ss)*e;
+    apply();
+    if(k<1) animId=requestAnimationFrame(step);
+  })(performance.now());
+}
+
+/* ---------- live simulation ---------- */
+let count=120465;
+let displayCount=count;          // value currently shown (lerps toward count)
+let countAnimId=0;
+const counterEl=document.getElementById("counter");
+function fmt(n){return Math.round(n).toLocaleString("en-IN");}
+
+// smoothly roll the displayed number toward the real count — calm, no flashing
+function animateCount(){
+  cancelAnimationFrame(countAnimId);
+  const start=displayCount, end=count, t0=performance.now(), dur=900;
+  const ease=t=>1-Math.pow(1-t,3);
+  (function step(now){
+    const k=Math.min(1,(now-t0)/dur);
+    displayCount=start+(end-start)*ease(k);
+    counterEl.textContent=fmt(displayCount);
+    if(k<1){ countAnimId=requestAnimationFrame(step); }
+    else { displayCount=end; counterEl.textContent=fmt(end); }
+  })(t0);
+}
+function bump(n){
+  if(n<=0) return;
+  count+=n;
+  animateCount();
+}
+
+/* ---------- live message strip ---------- */
+const msgTicker=document.getElementById("msgTicker");
+function setTicker(name,city){
+  if(!name) return;
+  msgTicker.classList.add("swap");
+  setTimeout(()=>{
+    msgTicker.innerHTML=`<span class="who">${name}, ${city}</span> just sent a thank you 💌`;
+    msgTicker.classList.remove("swap");
+  },380);
+}
+
+function tickCounter(){ bump(ri(6,38)); }
+
+let liveNode=null,liveTimer=0;
+function flashLive(){
+  // pick a random currently-visible, non-special node
+  const pool=nodes.filter(n=>nodeVisible(n)&&(n.kind==="solo"||n.kind==="cluster"));
+  if(!pool.length) return;
+  const n=pick(pool);
+  if(n.liveOff) clearTimeout(n.liveOff);
+  n.el.classList.remove("live"); void n.el.offsetWidth; n.el.classList.add("live");
+  setTicker(n.name,n.city);
+  bump(ri(20,90));
+  n.liveOff=setTimeout(()=>n.el.classList.remove("live"),4200);
+}
+
+function spawnLiveNode(){
+  if(nodes.length>120) return;
+  const parents=nodes.filter(n=>nodeVisible(n)&&!n.isMember&&n.kind!=="add");
+  const parent=pick(parents);
+  let x,y,ok=false;
+  for(let i=0;i<24&&!ok;i++){
+    const ang=rr(0,Math.PI*2), dist=rr(170,280);
+    x=parent.x+Math.cos(ang)*dist; y=parent.y+Math.sin(ang)*dist*0.85;
+    ok=!inVoid(x,y) && !nodes.some(m=>Math.hypot(m.x-x,m.y-y)<150) &&
+       x>WORLD.minX+200&&x<WORLD.maxX-200&&y>WORLD.minY+200&&y<WORLD.maxY-200;
+  }
+  if(!ok) return;
+  let n;
+  if(rnd()<0.2){
+    n=makeCluster(x,y,parent.id,0);            // a fresh little circle joins
+  }else{
+    n=addNode({x,y,tier:0,kind:"solo",name:nextName(),city:pick(CITIES),stamp:pick(STAMPS)});
+    addEdge(parent.id,n.id);
+  }
+  // render any nodes created above that don't yet have an element
+  nodes.forEach(m=>{ if(!m.el){ m.el=makeNodeEl(m); nodesEl.appendChild(m.el); } });
+  refreshVisibility();
+  rebuildThreads();
+  n.el.classList.add("pop","live");
+  setTicker(n.name,n.city);
+  bump(ri(30,110));
+  setTimeout(()=>n.el.classList.remove("live"),4200);
+}
+
+/* ---------- onboarding ---------- */
+const overlay=document.getElementById("overlay");
+document.getElementById("gotIt").onclick=()=>{
+  overlay.classList.add("hide");
+  try{localStorage.setItem("gullak_onb","1");}catch(e){}
+};
+if(localStorage.getItem("gullak_onb")) overlay.classList.add("hide");
+
+/* ---------- send sheet ---------- */
+const scrim=document.getElementById("sheetScrim");
+const sheet=document.getElementById("sheet");
+const friendList=document.getElementById("friendList");
+const submitBtn=document.getElementById("submitThanks");
+const hintLine=document.getElementById("hintLine");
+
+function friendRow(){
+  const row=document.createElement("div");
+  row.className="friend-row";
+  row.innerHTML=
+    `<input class="name" placeholder="Friend's name" />`+
+    `<input class="city" placeholder="City" maxlength="6" />`+
+    `<button class="rm" title="Remove">×</button>`;
+  row.querySelector(".rm").onclick=()=>{ if(friendList.children.length>2){row.remove();validate();} };
+  row.querySelectorAll("input").forEach(inp=>inp.addEventListener("input",validate));
+  return row;
+}
+function resetFriends(){
+  friendList.innerHTML="";
+  friendList.appendChild(friendRow());
+  friendList.appendChild(friendRow());
+}
+document.getElementById("addMore").onclick=()=>{ friendList.appendChild(friendRow()); validate(); };
+
+function validFriends(){
+  return [...friendList.querySelectorAll(".friend-row")]
+    .map(r=>({name:r.querySelector(".name").value.trim(),city:r.querySelector(".city").value.trim()}))
+    .filter(f=>f.name.length>0);
+}
+function validate(){
+  const f=validFriends();
+  const ok=f.length>=2;
+  submitBtn.disabled=!ok;
+  if(ok){ hintLine.textContent="Ready to send to "+f.length+" people 🎉"; hintLine.classList.add("ok"); }
+  else { hintLine.textContent=`Add ${2-f.length} more ${2-f.length===1?"person":"people"} to send.`; hintLine.classList.remove("ok"); }
+}
+function openSheet(){ resetFriends(); validate(); scrim.classList.add("show"); sheet.classList.add("show"); }
+function closeSheet(){ scrim.classList.remove("show"); sheet.classList.remove("show"); }
+document.getElementById("openSend").onclick=openSheet;
+scrim.onclick=closeSheet;
+
+const toast=document.getElementById("toast");
+function showToast(t){ toast.textContent=t; toast.classList.add("show"); setTimeout(()=>toast.classList.remove("show"),2600); }
+
+submitBtn.onclick=()=>{
+  const friends=validFriends();
+  closeSheet();
+  const you=byId[nodes.find(n=>n.kind==="you").id];
+  // place new thank-yous fanning down from You
+  const base=Math.PI/2, spread=Math.min(Math.PI*0.8, friends.length*0.34);
+  friends.forEach((f,i)=>{
+    const ang=base - spread/2 + (friends.length>1? spread*i/(friends.length-1):0);
+    const dist=rr(180,250);
+    let x=you.x+Math.cos(ang)*dist, y=you.y+Math.abs(Math.sin(ang))*dist+90;
+    // nudge away from existing nodes
+    let tries=0; while(nodes.some(m=>Math.hypot(m.x-x,m.y-y)<92)&&tries++<20){x+=rr(-40,40);y+=rr(20,60);}
+    const n=addNode({x,y,tier:0,kind:"solo",name:f.name,city:(f.city||"YOU").toUpperCase(),
+      sub:"",stamp:pick(STAMPS)});
+    n.el=makeNodeEl(n); nodesEl.appendChild(n.el);
+    addEdge(you.id,n.id);
+    setTimeout(()=>{ n.el.classList.add("pop","live"); setTimeout(()=>n.el.classList.remove("live"),4200);}, i*180);
+  });
+  rebuildThreads();
+  bump(friends.length*ri(1,4));
+  showToast(`Your thanks are travelling the chain ✨`);
+  // gently pull view back to You so the user sees their additions
+  goHome(true);
+};
+
+/* ---------- sound & haptics ---------- */
+let actx=null;
+function audioCtx(){
+  if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(actx && actx.state==="suspended") actx.resume();
+  return actx;
+}
+// soft synthesized "tick" on tap — short, gentle, no asset needed
+function clickSound(){
+  const c=audioCtx(); if(!c) return;
+  const t=c.currentTime;
+  const o=c.createOscillator(), g=c.createGain();
+  o.type="triangle";
+  o.frequency.setValueAtTime(660,t);
+  o.frequency.exponentialRampToValueAtTime(380,t+0.08);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.16,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+  o.connect(g).connect(c.destination);
+  o.start(t); o.stop(t+0.18);
+}
+function haptic(ms){ if(navigator.vibrate){ try{ navigator.vibrate(ms||12); }catch(e){} } }
+function tapFeedback(){ clickSound(); haptic(12); }
+
+/* ---------- background music ---------- */
+const bgm=document.getElementById("bgm");
+const soundToggle=document.getElementById("soundToggle");
+let muted=false;
+try{ muted=localStorage.getItem("gullak_muted")==="1"; }catch(e){}
+bgm.volume=0.35;
+bgm.muted=muted;
+soundToggle.classList.toggle("muted",muted);
+function startMusic(){ if(!muted) bgm.play().catch(()=>{}); }
+soundToggle.addEventListener("click",()=>{
+  muted=!muted;
+  bgm.muted=muted;
+  soundToggle.classList.toggle("muted",muted);
+  try{ localStorage.setItem("gullak_muted", muted?"1":"0"); }catch(e){}
+  startMusic();                       // ensure it's playing when unmuted
+  haptic(10);
+});
+// browsers block autoplay until a gesture — unlock audio + start music on first tap
+function firstGesture(){
+  audioCtx(); startMusic();
+  window.removeEventListener("pointerdown",firstGesture);
+  window.removeEventListener("click",firstGesture);
+}
+window.addEventListener("pointerdown",firstGesture);
+window.addEventListener("click",firstGesture);
+
+/* ---------- tap feedback on the "+" slots and any stamp ---------- */
+nodesEl.addEventListener("click",e=>{
+  const node=e.target.closest(".node");
+  if(!node) return;
+  if(moved>8) return;                 // it was a drag, not a tap
+  tapFeedback();
+  const stamp=node.querySelector(".stamp");
+  if(stamp){ stamp.classList.remove("tapped"); void stamp.offsetWidth; stamp.classList.add("tapped"); }
+});
+
+/* ---------- boot ---------- */
+function boot(){
+  buildChain();
+  relaxLayout(150);          // de-overlap the spread-out (expanded) layout
+  setupSvgFrame();
+  renderNodes();
+  computeHome();
+  tx=home.tx; ty=home.ty; scale=home.scale;
+  curTier= scale>=TIER_SCALE[2]?2: scale>=TIER_SCALE[1]?1:0;
+  curExpanded= scale>=EXPAND;
+  refreshVisibility();
+  rebuildThreads();
+  apply();
+
+  setInterval(tickCounter,950);
+  setInterval(flashLive,3400);
+  setInterval(spawnLiveNode,11000);
+}
+window.addEventListener("resize",()=>{ computeHome(); updateRecenter(); });
+boot();
+</script>
+</body>
+</html>
